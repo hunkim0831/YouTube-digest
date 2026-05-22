@@ -7,6 +7,9 @@ yt-dlp>=2025.1.15
 # Gemini API
 google-generativeai>=0.8.0
 
+# YouTube Data API (조회수 등 메타데이터)
+google-api-python-client>=2.0.0
+
 # RSS 피드 파싱
 feedparser>=6.0.10
 
