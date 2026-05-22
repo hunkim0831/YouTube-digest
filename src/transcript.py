@@ -2,25 +2,41 @@
 transcript.py
 ─────────────────────────────────────────────────────
 영상 자막 추출. 3단계 cascade fallback:
-  ① youtube-transcript-api
+  ① youtube-transcript-api (Webshare proxy 사용)
   ② yt-dlp 자동 자막
   ③ 영상 설명만 (최후 수단)
 """
 
+import os
 import subprocess
 import tempfile
-import os
 import re
 from pathlib import Path
 
 
 def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | None:
-    """1차 시도: youtube-transcript-api"""
+    """1차 시도: youtube-transcript-api (Webshare proxy 사용)"""
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
+        from youtube_transcript_api.proxies import WebshareProxyConfig
         
-        ytt = YouTubeTranscriptApi()
-        # 한국어 우선, 안 되면 영어, 안 되면 무엇이든
+        # GitHub Secrets에서 proxy 인증 정보 로드
+        webshare_username = os.environ.get("WEBSHARE_USERNAME")
+        webshare_password = os.environ.get("WEBSHARE_PASSWORD")
+        
+        if webshare_username and webshare_password:
+            print(f"[transcript] Webshare proxy 사용 시도")
+            ytt = YouTubeTranscriptApi(
+                proxy_config=WebshareProxyConfig(
+                    proxy_username=webshare_username,
+                    proxy_password=webshare_password,
+                )
+            )
+        else:
+            print(f"[transcript] proxy 인증 정보 없음, 직접 시도")
+            ytt = YouTubeTranscriptApi()
+        
+        # 한국어 우선, 안 되면 영어
         try:
             transcript = ytt.fetch(video_id, languages=[language, "en"])
         except Exception:
@@ -32,7 +48,7 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
             return text
         return None
     except Exception as e:
-        print(f"[transcript] ❌ youtube-transcript-api 실패: {type(e).__name__}")
+        print(f"[transcript] ❌ youtube-transcript-api 실패: {type(e).__name__}: {e}")
         return None
 
 
@@ -119,7 +135,6 @@ def get_transcript(video_id: str, language: str = "ko", max_chars: int = 30000) 
 
 
 if __name__ == "__main__":
-    # 단독 실행 시 테스트
     import sys
     test_id = sys.argv[1] if len(sys.argv) > 1 else "dQw4w9WgXcQ"
     text, source = get_transcript(test_id)
