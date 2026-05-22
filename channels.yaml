@@ -1,0 +1,26 @@
+# ============================================================
+# YouTube Digest - 채널 설정 파일
+# ============================================================
+# 새 채널 추가 방법:
+#   1. 아래 형식으로 channels 리스트에 항목 추가
+#   2. channel_id는 'UC'로 시작하는 24자 문자열
+#   3. priority: high / medium / low
+#   4. language: ko / en
+# ============================================================
+
+channels:
+  - name: "삼프로TV"
+    channel_id: "UChlv4GSd7OQl3js-jkLOnFA"
+    priority: high
+    language: ko
+
+# 일반 설정
+settings:
+  # 최근 몇 시간 이내의 영상만 처리할지
+  lookback_hours: 24
+  
+  # 한 번 실행 시 처리할 최대 영상 수 (비용·시간 통제)
+  max_videos_per_run: 5
+  
+  # 영상이 너무 길면 자막 앞부분만 사용 (토큰 절약)
+  max_transcript_chars: 30000
