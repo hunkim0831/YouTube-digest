@@ -19,14 +19,12 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
     
     개선:
     - 사용 가능한 자막 목록을 먼저 조회
-    - 어떤 언어든 발견되면 그것을 사용 (수동/자동 자막 모두 OK)
-    - 명시적으로 list 메서드를 시도 → 어떤 자막이라도 가져옴
+    - 어떤 언어든 발견되면 그것을 사용
     """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         from youtube_transcript_api.proxies import WebshareProxyConfig
         
-        # GitHub Secrets에서 proxy 인증 정보 로드
         webshare_username = os.environ.get("WEBSHARE_USERNAME")
         webshare_password = os.environ.get("WEBSHARE_PASSWORD")
         
@@ -42,12 +40,11 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
             print(f"[transcript] proxy 인증 정보 없음, 직접 시도")
             ytt = YouTubeTranscriptApi()
         
-        # 우선순위: ko → en → 다른 모든 언어
-        # 단계적으로 시도해서 하나라도 성공하면 반환
+        # 단계적 시도
         language_attempts = [
-            [language],           # 1차: 요청 언어 (보통 ko)
-            [language, "en"],     # 2차: 요청 언어 + 영어
-            ["ko", "en"],         # 3차: 한국어 + 영어
+            [language],
+            [language, "en"],
+            ["ko", "en"],
         ]
         
         transcript = None
@@ -60,11 +57,10 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
             except Exception:
                 continue
         
-        # 마지막 시도: list로 사용 가능한 자막을 본 뒤 첫 번째 것을 가져옴
+        # 마지막 fallback: 사용 가능한 어떤 자막이든
         if not transcript:
             try:
                 transcript_list = ytt.list(video_id)
-                # 사용 가능한 어떤 자막이든 가져오기 (자동/수동 무관)
                 for t in transcript_list:
                     try:
                         fetched = t.fetch()
@@ -81,7 +77,6 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
             print(f"[transcript] ❌ 사용 가능한 자막 없음")
             return None
         
-        # 텍스트 조립
         text = " ".join([snippet.text for snippet in transcript])
         if text.strip():
             print(f"[transcript] ✅ youtube-transcript-api 성공 ({len(text)}자)")
@@ -91,7 +86,6 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
     except Exception as e:
         error_type = type(e).__name__
         print(f"[transcript] ❌ youtube-transcript-api 실패: {error_type}")
-        # 상세 에러는 짧게만
         error_msg = str(e).split('\n')[0]
         print(f"[transcript]    이유: {error_msg[:150]}")
         return None
@@ -119,7 +113,6 @@ def _try_ytdlp(video_id: str, language: str = "ko") -> str | None:
             if result.returncode != 0:
                 print(f"[transcript] yt-dlp 종료 코드 {result.returncode}")
             
-            # 다운로드된 .vtt 파일 찾기
             vtt_files = list(Path(tmpdir).glob(f"{video_id}*.vtt"))
             if not vtt_files:
                 return None
@@ -136,7 +129,6 @@ def _try_ytdlp(video_id: str, language: str = "ko") -> str | None:
 
 
 def _parse_vtt(vtt_content: str) -> str:
-    """WebVTT 파일에서 텍스트만 추출."""
     lines = vtt_content.split("\n")
     text_lines = []
     seen = set()
@@ -154,25 +146,16 @@ def _parse_vtt(vtt_content: str) -> str:
 
 
 def get_transcript(video_id: str, language: str = "ko", max_chars: int = 30000) -> tuple[str, str]:
-    """
-    자막 추출 main 함수.
-    
-    Returns: (transcript_text, source_label)
-      source_label: "youtube-transcript-api" | "yt-dlp" | "unavailable"
-    """
     print(f"[transcript] video_id={video_id} 자막 추출 시도")
     
-    # 1차
     text = _try_youtube_transcript_api(video_id, language)
     if text:
         return text[:max_chars], "youtube-transcript-api"
     
-    # 2차
     text = _try_ytdlp(video_id, language)
     if text:
         return text[:max_chars], "yt-dlp"
     
-    # 3차 - 모두 실패
     print(f"[transcript] ⚠️  자막을 가져올 수 없음")
     return "", "unavailable"
 
@@ -183,4 +166,3 @@ if __name__ == "__main__":
     text, source = get_transcript(test_id)
     print(f"\n출처: {source}")
     print(f"길이: {len(text)}자")
-    print(f"앞부분: {text[:500]}")
