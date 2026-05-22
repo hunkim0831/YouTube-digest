@@ -15,7 +15,13 @@ from pathlib import Path
 
 
 def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | None:
-    """1차 시도: youtube-transcript-api (Webshare proxy 사용)"""
+    """1차 시도: youtube-transcript-api (Webshare proxy 사용)
+    
+    개선:
+    - 사용 가능한 자막 목록을 먼저 조회
+    - 어떤 언어든 발견되면 그것을 사용 (수동/자동 자막 모두 OK)
+    - 명시적으로 list 메서드를 시도 → 어떤 자막이라도 가져옴
+    """
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         from youtube_transcript_api.proxies import WebshareProxyConfig
@@ -36,19 +42,58 @@ def _try_youtube_transcript_api(video_id: str, language: str = "ko") -> str | No
             print(f"[transcript] proxy 인증 정보 없음, 직접 시도")
             ytt = YouTubeTranscriptApi()
         
-        # 한국어 우선, 안 되면 영어
-        try:
-            transcript = ytt.fetch(video_id, languages=[language, "en"])
-        except Exception:
-            transcript = ytt.fetch(video_id)
+        # 우선순위: ko → en → 다른 모든 언어
+        # 단계적으로 시도해서 하나라도 성공하면 반환
+        language_attempts = [
+            [language],           # 1차: 요청 언어 (보통 ko)
+            [language, "en"],     # 2차: 요청 언어 + 영어
+            ["ko", "en"],         # 3차: 한국어 + 영어
+        ]
         
+        transcript = None
+        for langs in language_attempts:
+            try:
+                transcript = ytt.fetch(video_id, languages=langs)
+                if transcript:
+                    print(f"[transcript] 언어 {langs}로 자막 발견")
+                    break
+            except Exception:
+                continue
+        
+        # 마지막 시도: list로 사용 가능한 자막을 본 뒤 첫 번째 것을 가져옴
+        if not transcript:
+            try:
+                transcript_list = ytt.list(video_id)
+                # 사용 가능한 어떤 자막이든 가져오기 (자동/수동 무관)
+                for t in transcript_list:
+                    try:
+                        fetched = t.fetch()
+                        if fetched:
+                            transcript = fetched
+                            print(f"[transcript] '{t.language_code}' 자막 발견 (fallback)")
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+        
+        if not transcript:
+            print(f"[transcript] ❌ 사용 가능한 자막 없음")
+            return None
+        
+        # 텍스트 조립
         text = " ".join([snippet.text for snippet in transcript])
         if text.strip():
             print(f"[transcript] ✅ youtube-transcript-api 성공 ({len(text)}자)")
             return text
         return None
+    
     except Exception as e:
-        print(f"[transcript] ❌ youtube-transcript-api 실패: {type(e).__name__}: {e}")
+        error_type = type(e).__name__
+        print(f"[transcript] ❌ youtube-transcript-api 실패: {error_type}")
+        # 상세 에러는 짧게만
+        error_msg = str(e).split('\n')[0]
+        print(f"[transcript]    이유: {error_msg[:150]}")
         return None
 
 
@@ -64,7 +109,7 @@ def _try_ytdlp(video_id: str, language: str = "ko") -> str | None:
                 "--skip-download",
                 "--write-auto-subs",
                 "--write-subs",
-                "--sub-langs", f"{language},en",
+                "--sub-langs", f"{language},en,ko",
                 "--sub-format", "vtt",
                 "-o", output_template,
                 url,
@@ -86,7 +131,7 @@ def _try_ytdlp(video_id: str, language: str = "ko") -> str | None:
                 return text
             return None
     except Exception as e:
-        print(f"[transcript] ❌ yt-dlp 실패: {type(e).__name__}: {e}")
+        print(f"[transcript] ❌ yt-dlp 실패: {type(e).__name__}")
         return None
 
 
@@ -97,12 +142,10 @@ def _parse_vtt(vtt_content: str) -> str:
     seen = set()
     for line in lines:
         line = line.strip()
-        # 타임스탬프, 헤더, 빈 줄 건너뛰기
         if not line or "-->" in line or line.startswith(("WEBVTT", "Kind:", "Language:", "NOTE")):
             continue
         if line.isdigit():
             continue
-        # HTML 태그 제거
         clean = re.sub(r"<[^>]+>", "", line).strip()
         if clean and clean not in seen:
             text_lines.append(clean)
