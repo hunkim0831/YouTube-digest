@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: "0 21 * * *"
   
-  # 수동 실행 버튼 (테스트용)
+  # 수동 실행 버튼
   workflow_dispatch:
 
 jobs:
@@ -34,5 +34,6 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           WEBSHARE_USERNAME: ${{ secrets.WEBSHARE_USERNAME }}
           WEBSHARE_PASSWORD: ${{ secrets.WEBSHARE_PASSWORD }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
           python src/main.py
