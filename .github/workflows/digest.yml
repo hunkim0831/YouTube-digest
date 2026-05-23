@@ -1,9 +1,9 @@
 name: Daily YouTube Digest
 
 on:
-  # 매일 KST 새벽 6시 = UTC 21:00 (전일)에 자동 실행
+  # 변경 후 (KST 05:17 도착 예상)
   schedule:
-    - cron: "0 21 * * *"
+    - cron: "17 20 * * *"
   
   # 수동 실행 버튼
   workflow_dispatch:
